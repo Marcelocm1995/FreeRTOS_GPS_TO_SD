@@ -2,8 +2,9 @@
 #define __GPS_PARSER_H__
 
 #include "usart.h"
+#include "stdlib.h"
 
-extern uint8_t READY_MESSAGE;
+extern uint8_t VbReadyNmeaMessage;
 
 extern const char GPS_BAUD_115200;
 

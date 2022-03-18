@@ -93,7 +93,7 @@ void USART_CharReception_Callback(void)
 	if(Rx_data[i] == 0x0A)
 	{
 		i = 0;
-		READY_MESSAGE = 1;
+		VbReadyNmeaMessage = 1;
 		//HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 	}
 	else
