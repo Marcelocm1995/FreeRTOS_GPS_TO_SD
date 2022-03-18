@@ -22,6 +22,9 @@
 
 /* USER CODE BEGIN 0 */
 
+char Rx_data[80];
+char Tx_data[80];
+
 /* USER CODE END 0 */
 
 /* USART1 init function */
@@ -77,5 +80,28 @@ void MX_USART1_UART_Init(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+void USART_CharReception_Callback(void)
+{
+
+  /* Read Received character. RXNE flag is cleared by reading of DR register */
+  Rx_data[i] = LL_USART_ReceiveData8(USART1);
+	
+	/* Echo received character on TX */
+  //LL_USART_TransmitData8(USART2, Rx_data[i]);
+	
+	if(Rx_data[i] == 0x0A)
+	{
+		i = 0;
+		READY_MESSAGE = 1;
+		//HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	}
+	else
+	{
+		i++;
+		//HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+	}
+  
+}
 
 /* USER CODE END 1 */

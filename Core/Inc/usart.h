@@ -29,6 +29,7 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
+#include "GPS_Parser.h"
 
 /* USER CODE END Includes */
 
