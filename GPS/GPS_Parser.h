@@ -2,6 +2,7 @@
 #define __GPS_PARSER_H__
 
 #include "usart.h"
+#include "stdlib.h"
 
 extern bool VbGPS_ReadyNmeaMsg;
 
