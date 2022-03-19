@@ -3,7 +3,7 @@
 
 #include "usart.h"
 
-extern uint8_t READY_MESSAGE;
+extern bool VbGPS_ReadyNmeaMsg;
 
 extern const char GPS_BAUD_115200;
 

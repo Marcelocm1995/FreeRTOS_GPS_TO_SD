@@ -1,5 +1,7 @@
 #include "GPS_Parser.h"
 
+#define COMMA ','
+
 const char GPS_BAUD_115200[] = "$PMTK251,115200*1F";
 
 const char ONLY_GPRMC[] = "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29";
@@ -9,302 +11,284 @@ const char HOT_START[] = "$PMTK101*32";
 const char WARM_START[] = "$PMTK102*31";
 const char COLD_START[] = "$PMTK103*30";
 
-const char GPS_2s[]   = "$PMTK300,2000,0,0,0,0*1F";
-const char GPS_1Hz[]  = "$PMTK300,1000,0,0,0,0*1C";
-const char GPS_2Hz[]  = "$PMTK300,500,0,0,0,0*28";
-const char GPS_5Hz[]  = "$PMTK300,200,0,0,0,0*2F";
+const char GPS_2s[] = "$PMTK300,2000,0,0,0,0*1F";
+const char GPS_1Hz[] = "$PMTK300,1000,0,0,0,0*1C";
+const char GPS_2Hz[] = "$PMTK300,500,0,0,0,0*28";
+const char GPS_5Hz[] = "$PMTK300,200,0,0,0,0*2F";
 const char GPS_10Hz[] = "$PMTK300,100,0,0,0,0*2C";
 
-const char CRLF[2] = {0x0D,0x0A};
+const char CRLF[2] = {0x0D, 0x0A};
 
-char NMEA_type[6];
-char NMEA_time[12];
-char NMEA_fix[2];
-char NMEA_latitude[10];
-char NMEA_latitude_pole[2];
-char NMEA_longitude[10];
-char NMEA_longitude_side[2];
-char NMEA_speed[8];
-char NMEA_course[8];
-char NMEA_date[8];
-char NMEA_variation[8];
-char NMEA_variation_side[2];
+char SaGPS_NmeaType[6];
+char SaGPS_NmeaTime[12];
+char SaGPS_NmeaFix[2];
+char SaGPS_NmeaLatitude[10];
+char SaGPS_NmeaLatitudePole[2];
+char SaGPS_NmeaLongitude[10];
+char SaGPS_NmeaLongitudeSide[2];
+char SaGPS_NmeaSpeed[8];
+char SaGPS_NmeaCourse[8];
+char SaGPS_NmeaDate[8];
+char SaGPS_NmeaVariation[8];
+char SaGPS_NmeaVariationSide[2];
 
-char rawHOUR[2];
-char rawMINUTE[2];
-char rawSECOND[6];
+char SaGPS_RawHour[2];
+char SaGPS_RawMinute[2];
+char SaGPS_RawSecond[6];
 
-uint8_t HOUR;
-uint8_t MINUTE;
-float SECOND;
+uint8_t SyGPS_Hour;
+uint8_t SyGPS_Minute;
+float SfGPS_Second;
 
-char OLD_NMEA_latitude[10];
-char OLD_NMEA_longitude[10];
-char OLD_NMEA_latitude_pole[2];
-char OLD_NMEA_longitude_side[2];
+char SaGPS_OldNmeaLatitude[10];
+char SaGPS_OldNmeaLongitude[10];
+char SaGPS_OldNmeaLatitudePole[2];
+char SaGPS_OldNmeaLongitudeSide[2];
 
-uint8_t NMEA_type_length;
-uint8_t NMEA_time_length;
-uint8_t NMEA_fix_length;
-uint8_t NMEA_latitude_length;
-uint8_t NMEA_latitude_pole_length;
-uint8_t NMEA_longitude_length;
-uint8_t NMEA_longitude_side_length;
-uint8_t NMEA_speed_length;
-uint8_t NMEA_course_length;
-uint8_t NMEA_date_length;
-uint8_t NMEA_variation_length;
-uint8_t NMEA_variation_side_length;
+uint8_t SyGPS_NmeaTypeLength;
+uint8_t SyGPS_NmeaTimeLength;
+uint8_t SyGPS_NmeaFixLength;
+uint8_t SyGPS_NmeaLatitudeLength;
+uint8_t SyGPS_NmeaLatitudePoleLength;
+uint8_t SyGPS_NmeaLongitudeLength;
+uint8_t SyGPS_NmeaLongitudeSideLength;
+uint8_t SyGPS_NmeaSpeedLength;
+uint8_t SyGPS_NmeaCourseLength;
+uint8_t SyGPS_NmeaDateLength;
+uint8_t SyGPS_NmeaVariationLength;
+uint8_t SyGPS_NmeaVariationSideLength;
 
-char myNMEA[80];
+char SaGPS_NmeaData[80];
 
-unsigned int i = 0;
+uint8_t SiGPS_NmeaCharIndex = 0;
+uint8_t SiGPS_OldNmeaCharIndex = 0;
 
-uint16_t TIMER_MS;
-uint8_t k = 0;
-uint8_t j = 0;
-uint8_t result;
-uint8_t NMEA_length = 0;
-uint8_t COMMA_COUNT = 0;
-uint8_t NMEA_length_pause = 0;
+bool VbGPS_ReadyNmeaMsg = 0;
 
-uint8_t READY_MESSAGE = 0;
+float SfGPS_DistanceMeters = 0.0f;
+float SfGPS_DistanceKm = 0.0f;
 
-float DISTANCE_METERS = 0.0f;
-float DISTANCE_KM = 0.0f;
+uint16_t SwGPS_Speed;
+float SfGPS_DeltaMeters;
 
-uint16_t SPEED;
-float deltakm;
-
-if (READY_MESSAGE == 1)
+uint8_t ParseGpsData()
 {
-	memcpy(myNMEA, Rx_data, 80);
-	memset(Rx_data, 0x00, 80);
-
-	if ((myNMEA[1] == 'G') && (myNMEA[2] == 'P') && (myNMEA[3] == 'R') && (myNMEA[4] == 'M') && (myNMEA[5] == 'C'))
+	if (VbGPS_ReadyNmeaMsg == 1)
 	{
-		result = 1;
+		memcpy(SaGPS_NmeaData, Rx_data, 80);
+		memset(Rx_data, 0x00, 80);
+
+		if (!((SaGPS_NmeaData[1] == 'G') && (SaGPS_NmeaData[2] == 'P') && (SaGPS_NmeaData[3] == 'R') && (SaGPS_NmeaData[4] == 'M') && (SaGPS_NmeaData[5] == 'C')))
+		{
+			memset(SaGPS_NmeaData, 0x00, 80);
+			return 0;
+		}
+
+		// Example $GPRMC,151802.962,A,2338.944,S,04639.370,W,208.0,219.1,240320,000.0,W*7E
+		// vector  0123456789
+		memcpy(SaGPS_OldNmeaLatitude, SaGPS_NmeaLatitude, sizeof(SaGPS_NmeaLatitude));
+		memcpy(SaGPS_OldNmeaLongitude, SaGPS_NmeaLongitude, sizeof(SaGPS_NmeaLongitude));
+		memcpy(SaGPS_OldNmeaLatitudePole, SaGPS_NmeaLatitudePole, sizeof(SaGPS_NmeaLatitudePole));
+		memcpy(SaGPS_OldNmeaLongitudeSide, SaGPS_NmeaLongitudeSide, sizeof(SaGPS_NmeaLongitudeSide));
+
+		SiGPS_OldNmeaCharIndex = 7;
+		SiGPS_NmeaCharIndex = 7;
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaTime[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaTimeLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaFix[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaFixLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaLatitude[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaLatitudeLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaLatitudePole[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaLatitudePoleLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaLongitude[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaLongitudeLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaLongitudeSide[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaLongitudeSideLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaSpeed[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaSpeedLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaCourse[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaCourseLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaDate[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaDateLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != COMMA)
+		{
+			SaGPS_NmeaVariation[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaVariationLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
+		SiGPS_OldNmeaCharIndex = SiGPS_NmeaCharIndex;
+
+		SiGPS_NmeaCharIndex++;
+
+		while (SaGPS_NmeaData[SiGPS_NmeaCharIndex] != '*')
+		{
+			SaGPS_NmeaVariationSide[SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1] = SaGPS_NmeaData[SiGPS_NmeaCharIndex];
+			SiGPS_NmeaCharIndex++;
+		}
+		SyGPS_NmeaVariationSideLength = SiGPS_NmeaCharIndex - SiGPS_OldNmeaCharIndex - 1;
 	}
-
-	else
-	{
-		result = 0;
-		memset(myNMEA, 0x00, 80);
-	}
-
-	// Example $GPRMC,151802.962,A,2338.944,S,04639.370,W,208.0,219.1,240320,000.0,W*7E
-	// vector  0123456789
-	if (result)
-	{
-		memcpy(OLD_NMEA_latitude, NMEA_latitude, sizeof(NMEA_latitude));
-		memcpy(OLD_NMEA_longitude, NMEA_longitude, sizeof(NMEA_longitude));
-		memcpy(OLD_NMEA_latitude_pole, NMEA_latitude_pole, sizeof(NMEA_latitude_pole));
-		memcpy(OLD_NMEA_longitude_side, NMEA_longitude_side, sizeof(NMEA_longitude_side));
-
-		NMEA_length_pause = 7;
-		j = 7;
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_time[j - NMEA_length_pause] = myNMEA[j];
-			j++;
-		}
-		NMEA_time_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_fix[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_fix_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_latitude[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_latitude_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_latitude_pole[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_latitude_pole_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_longitude[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_longitude_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_longitude_side[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_longitude_side_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_speed[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_speed_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_course[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_course_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_date[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_date_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != COMMA)
-		{
-			NMEA_variation[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_variation_length = j - NMEA_length_pause - 1;
-		NMEA_length_pause = j;
-
-		j++;
-
-		while (myNMEA[j] != '*')
-		{
-			NMEA_variation_side[j - NMEA_length_pause - 1] = myNMEA[j];
-			j++;
-		}
-		NMEA_variation_side_length = j - NMEA_length_pause - 1;
-	}
-
-	j = 0;
-	k = 0;
-	result = 0;
-	NMEA_length_pause = 0;
-	// memset(myNMEA,0x00,80);
-
-	SPEED = (atoi(NMEA_speed)) * 1.852f;
-
-	rawHOUR[0] = NMEA_time[0];
-	rawHOUR[1] = NMEA_time[1];
-	HOUR = atoi(rawHOUR);
-	HOUR = HOUR - 3;
-	if (HOUR < 0)
-		HOUR += 24;
-	
-	if ((NMEA_fix[0] == 'A') && (SPEED > 0))
-	{
-		float lat1 = GpsToDecimalDegrees(OLD_NMEA_latitude, OLD_NMEA_latitude_pole[0]);
-		float long1 = GpsToDecimalDegrees(OLD_NMEA_longitude, OLD_NMEA_longitude_side[0]);
-		float lat2 = GpsToDecimalDegrees(NMEA_latitude, NMEA_latitude_pole[0]);
-		float long2 = GpsToDecimalDegrees(NMEA_longitude, NMEA_longitude_side[0]);
-
-		deltakm = distance_between(lat1, long1, lat2, long2);
-		DISTANCE_METERS = DISTANCE_METERS + deltakm;
-		DISTANCE_KM = DISTANCE_METERS / 1000.0;
-	}
-	if (HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == 0)
-	{
-		DISTANCE_METERS = 0;
-		DISTANCE_KM = 0;
-	}
-
-	READY_MESSAGE = 0;
 }
 
-
-float GpsToDecimalDegrees(const char* nmeaPos, char quadrant)
+void qlqrcoisa()
 {
-  float v= 0;
-  if(strlen(nmeaPos)>5)
-  {
-    char integerPart[3+1];
-    int digitCount= (nmeaPos[4]=='.' ? 2 : 3);
-    memcpy(integerPart, nmeaPos, digitCount);
-    integerPart[digitCount]= 0;
-    nmeaPos+= digitCount;
-    v= atoi(integerPart) + atof(nmeaPos)/60.;
-    if(quadrant=='W' || quadrant=='S')
-      v= -v;
-  }
-  return v;
+	SiGPS_NmeaCharIndex = 0;
+	SiGPS_OldNmeaCharIndex = 0;
+	// memset(SaGPS_NmeaData,0x00,80);
+
+	SwGPS_Speed = (atoi(SaGPS_NmeaSpeed)) * 1.852f;
+
+	SaGPS_RawHour[0] = SaGPS_NmeaTime[0];
+	SaGPS_RawHour[1] = SaGPS_NmeaTime[1];
+	SyGPS_Hour = atoi(SaGPS_RawHour);
+	SyGPS_Hour = SyGPS_Hour - 3;
+	if (SyGPS_Hour < 0)
+		SyGPS_Hour += 24;
+
+	if ((SaGPS_NmeaFix[0] == 'A') && (SwGPS_Speed > 0))
+	{
+		float LfGPS_Latitude1 = GpsToDecimalDegrees(SaGPS_OldNmeaLatitude, SaGPS_OldNmeaLatitudePole[0]);
+		float LfGPS_Longitude1 = GpsToDecimalDegrees(SaGPS_OldNmeaLongitude, SaGPS_OldNmeaLongitudeSide[0]);
+		float LfGPS_Latitude2 = GpsToDecimalDegrees(SaGPS_NmeaLatitude, SaGPS_NmeaLatitudePole[0]);
+		float LfGPS_Longitude2 = GpsToDecimalDegrees(SaGPS_NmeaLongitude, SaGPS_NmeaLongitudeSide[0]);
+
+		SfGPS_DeltaMeters = distance_between(LfGPS_Latitude1, LfGPS_Longitude1, LfGPS_Latitude2, LfGPS_Longitude2);
+		SfGPS_DistanceMeters = SfGPS_DistanceMeters + SfGPS_DeltaMeters;
+		SfGPS_DistanceKm = SfGPS_DistanceMeters / 1000.0;
+	}
+	VbGPS_ReadyNmeaMsg = 0;
 }
 
-float radians(float val)
+float GpsToDecimalDegrees(const char *LyGPS_NmeaPos, char LyGPS_NmeaQuadrant)
 {
-    float radians_val = (val * 71) / 4068;
-    return radians_val;
-    //float rad = val * 1000.0 / 57296.0;
-    //return rad;
+	float LfGPS_DecimalDegrees = 0;
+	if (strlen(LyGPS_NmeaPos) > 5)
+	{
+		char LyGPS_IntegerPart[3 + 1];
+		int LwGPS_DigitCount = (LyGPS_NmeaPos[4] == '.' ? 2 : 3);
+		memcpy(LyGPS_IntegerPart, LyGPS_NmeaPos, LwGPS_DigitCount);
+		LyGPS_IntegerPart[LwGPS_DigitCount] = 0;
+		LyGPS_NmeaPos += LwGPS_DigitCount;
+		LfGPS_DecimalDegrees = atoi(LyGPS_IntegerPart) + atof(LyGPS_NmeaPos) / 60.;
+		if (LyGPS_NmeaQuadrant == 'W' || LyGPS_NmeaQuadrant == 'S')
+			LfGPS_DecimalDegrees = -LfGPS_DecimalDegrees;
+	}
+	return LfGPS_DecimalDegrees;
 }
 
-float distance_between (float lat1, float long1, float lat2, float long2)
-{	
-  // returns distance in meters between two positions, both specified 
-  // as signed decimal-degrees latitude and longitude. Uses great-circle 
-  // distance computation for hypothetical sphere of radius 6372795 meters.
-  // Because Earth is no exact sphere, rounding errors may be up to 0.5%.
-  // Courtesy of Maarten Lamers
-  deltakm = radians(long1-long2);
-  float sdlong = sin(deltakm);
-  float cdlong = cos(deltakm);
-  lat1 = radians(lat1);
-  lat2 = radians(lat2);
-  float slat1 = sin(lat1);
-  float clat1 = cos(lat1);
-  float slat2 = sin(lat2);
-  float clat2 = cos(lat2);
-  deltakm = (clat1 * slat2) - (slat1 * clat2 * cdlong); 
-  deltakm = deltakm * deltakm; 
-  deltakm += ((clat2 * sdlong)*(clat2 * sdlong)); 
-  deltakm = sqrt(deltakm); 
-  float denom = ((slat1 * slat2) + (clat1 * clat2 * cdlong)); 
-  deltakm = atan2(deltakm, denom); 
-  deltakm =  deltakm * 6372795;
-    
-  return deltakm;
+float radians(float LfGPS_Val)
+{
+	float LfGPS_RadVal = (LfGPS_Val * 71) / 4068;
+	return LfGPS_RadVal;
+	// float rad = LfGPS_Val * 1000.0 / 57296.0;
+	// return rad;
+}
+
+float distance_between(float LfGPS_Latitude1, float LfGPS_Longitude1, float LfGPS_Latitude2, float LfGPS_Longitude2)
+{
+	// returns distance in meters between two positions, both specified
+	// as signed decimal-degrees latitude and longitude. Uses great-circle
+	// distance computation for hypothetical sphere of radius 6372795 meters.
+	// Because Earth is no exact sphere, rounding errors may be up to 0.5%.
+	// Courtesy of Maarten Lamers
+	SfGPS_DeltaMeters = radians(LfGPS_Longitude1 - LfGPS_Longitude2);
+	float LfGPS_LongitudeDeltaSin = sin(SfGPS_DeltaMeters);
+	float LfGPS_LongitudeDeltaCos = cos(SfGPS_DeltaMeters);
+	LfGPS_Latitude1 = radians(LfGPS_Latitude1);
+	LfGPS_Latitude2 = radians(LfGPS_Latitude2);
+	float LfGPS_LatitudeSin1 = sin(LfGPS_Latitude1);
+	float LfGPS_LatitudeCos1 = cos(LfGPS_Latitude1);
+	float LfGPS_LatitudeSin2 = sin(LfGPS_Latitude2);
+	float LfGPS_LatitudeCos2 = cos(LfGPS_Latitude2);
+	SfGPS_DeltaMeters = (LfGPS_LatitudeCos1 * LfGPS_LatitudeSin2) - (LfGPS_LatitudeSin1 * LfGPS_LatitudeCos2 * LfGPS_LongitudeDeltaCos);
+	SfGPS_DeltaMeters = SfGPS_DeltaMeters * SfGPS_DeltaMeters;
+	SfGPS_DeltaMeters += ((LfGPS_LatitudeCos2 * LfGPS_LongitudeDeltaSin) * (LfGPS_LatitudeCos2 * LfGPS_LongitudeDeltaSin));
+	SfGPS_DeltaMeters = sqrt(SfGPS_DeltaMeters);
+	float LfGPS_Denom = ((LfGPS_LatitudeSin1 * LfGPS_LatitudeSin2) + (LfGPS_LatitudeCos1 * LfGPS_LatitudeCos2 * LfGPS_LongitudeDeltaCos));
+	SfGPS_DeltaMeters = atan2(SfGPS_DeltaMeters, LfGPS_Denom);
+	SfGPS_DeltaMeters = SfGPS_DeltaMeters * 6372795;
+
+	return SfGPS_DeltaMeters;
 }
 
 uint16_t GetGpsSpeed()
 {
-	return SPEED;
+	return SwGPS_Speed;
 }
 
 float GetDistanceDelta()
 {
-	return deltakm;
+	return SfGPS_DeltaMeters;
 }
